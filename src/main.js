@@ -41,7 +41,7 @@ document.getElementById("btn-reset").addEventListener("click", () => {
   app.setState(defaultState(app.state.language));
 });
 
-// A shared link can arrive with a non-default build or view tab selected.
-syncTabs("data-build", "build", app.state.build);
+// A shared link can arrive with a non-default view tab selected. The build row
+// needs no such call: render() builds it from the language, active tab included.
 syncTabs("data-view", "view", app.state.view);
 app.render();

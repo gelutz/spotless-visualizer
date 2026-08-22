@@ -6,7 +6,7 @@ globalThis.location = { hash: "" };
 globalThis.history = { replaceState: (_a, _b, url) => { globalThis.location.hash = url; } };
 
 const { defaultState, switchLanguage, saveToHash, loadFromHash } = await import("./state.js");
-const { registerLanguage } = await import("./languages/registry.js");
+const { registerLanguage, getLanguage } = await import("./languages/registry.js");
 await import("./languages/java/index.js");
 
 /* Java's formatters declare no options, so a language that does is needed to
@@ -19,6 +19,15 @@ registerLanguage({
       opts: [{ id: "width", type: "int", def: 80 }, { id: "semi", type: "bool", def: true }],
       run: async s => s }
   ],
+  steps: [], stepGroups: [{ id: "g", title: "G" }]
+});
+
+/* A language off the JVM entirely: its config pane offers only the file its own
+ * formatter reads, so "gradle" is not a build target it has. */
+registerLanguage({
+  id: "nativeOnly", label: "NativeOnly", fileName: "f.ts", blockName: "n",
+  builds: ["native"],
+  formatters: [{ id: "none", label: "(none)", doc: "", text: "a", gradle: null, maven: null }],
   steps: [], stepGroups: [{ id: "g", title: "G" }]
 });
 
@@ -160,5 +169,47 @@ describe("hash round trip", () => {
     location.hash = "#" + btoa(JSON.stringify({ l: "kotlin", f: "none", e: [], o: {} }))
       .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     expect(loadFromHash().language).toBe("java");
+  });
+});
+
+describe("build target", () => {
+  it("defaults to the first target the language declares", () => {
+    expect(defaultState("java").build).toBe("gradle");
+    expect(defaultState("nativeOnly").build).toBe("native");
+  });
+
+  it("round-trips a target the language offers", () => {
+    const s = defaultState("java");
+    s.build = "maven";
+    saveToHash(s);
+    expect(loadFromHash().build).toBe("maven");
+  });
+
+  it("drops a target the language does not offer, rather than rendering a dead tab", () => {
+    const s = defaultState("java");
+    s.build = "maven";
+    saveToHash(s);
+    // Hand-edit the encoded language so the link claims Maven for a native-only one.
+    const raw = JSON.parse(decodeURIComponent(escape(atob(
+      location.hash.slice(1).replace(/-/g, "+").replace(/_/g, "/")))));
+    raw.l = "nativeOnly";
+    location.hash = "#" + btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    expect(loadFromHash().build).toBe("native");
+  });
+
+  it("resets the target when switching to a language that lacks it", () => {
+    const s = defaultState("java");
+    s.build = "maven";
+    expect(switchLanguage(s, "nativeOnly").build).toBe("native");
+  });
+
+  it("never leaves a target outside the language's own row", () => {
+    // The invariant the config pane relies on: whatever build is set, the
+    // language offers it, so the active tab and the rendered pane agree.
+    for (const id of ["java", "nativeOnly", "opted"]) {
+      const st = defaultState(id);
+      expect(getLanguage(id).builds).toContain(st.build);
+    }
   });
 });

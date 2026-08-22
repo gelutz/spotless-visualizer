@@ -59,7 +59,7 @@ const prettierConfig = o => [
 
 export const TYPESCRIPT_FORMATTERS = [
   {
-    id: "none", label: "(none)", text: SAMPLE_NONE, gradle: null, maven: null,
+    id: "none", label: "(none)", text: SAMPLE_NONE, gradle: null, maven: null, native: null,
     doc: "No reformatter. Only the cheap steps below run.",
     details: {
       summary: "Leaves layout exactly as written. Useful for seeing what the small, " +
@@ -92,6 +92,23 @@ export const TYPESCRIPT_FORMATTERS = [
       `    <arrowParens>${o.arrowParens}</arrowParens>\n` +
       `    <quoteProps>${o.quoteProps}</quoteProps>\n` +
       `  </config>\n</prettier>`,
+    // What Prettier reads with no Spotless in the picture. Unlike the Spotless
+    // form this needs no parser: the real Prettier sniffs it from the filename.
+    native: o => ({
+      file: ".prettierrc.json",
+      text: JSON.stringify({
+        printWidth: o.printWidth,
+        tabWidth: o.tabWidth,
+        useTabs: o.useTabs,
+        semi: o.semi,
+        singleQuote: o.singleQuote,
+        bracketSpacing: o.bracketSpacing,
+        trailingComma: o.trailingComma,
+        arrowParens: o.arrowParens,
+        quoteProps: o.quoteProps
+      }, null, 2),
+      run: "npx prettier --write 'src/**/*.ts'"
+    }),
     details: {
       summary: "Prettier reprints the file from its parsed AST: it throws away your line breaks " +
                "and re-derives them to fit the print width. What it will not touch is semantics - " +
@@ -131,6 +148,16 @@ export const TYPESCRIPT_FORMATTERS = [
     maven:  o => `<biome>\n  <version>2.1.0</version>\n  <configPath>config</configPath>\n` +
       `  <language>ts</language>\n</biome>\n` +
       `<!-- config/biome.json: ${JSON.stringify(biomeJson(o))} -->`,
+    // The same biome.json Spotless points configPath at - except here it sits at
+    // the repo root, which is where Biome looks for it by itself.
+    native: o => ({
+      file: "biome.json",
+      text: JSON.stringify({
+        $schema: "https://biomejs.dev/schemas/2.1.0/schema.json",
+        ...biomeJson(o)
+      }, null, 2),
+      run: "npx @biomejs/biome format --write src"
+    }),
     details: {
       summary: "Biome is a formatter and linter written in Rust, shipping as a single native " +
                "binary - it is the one step here that needs no Node in a real build. Its output " +
@@ -158,6 +185,15 @@ export const TYPESCRIPT_FORMATTERS = [
     doc: "Legacy. Wraps a Node CLI that reads config off disk, so this one is a snapshot.",
     gradle: () => `tsfmt('7.2.2')\n  .tsconfigFile('tsconfig.json')`,
     maven:  () => `<tsfmt>\n  <version>7.2.2</version>\n  <tsconfigFile>tsconfig.json</tsconfigFile>\n</tsfmt>`,
+    // tsfmt reads formatting settings out of tsconfig.json, which it does
+    // discover on its own - the auto-discovery only breaks under Spotless.
+    native: () => ({
+      file: "tsconfig.json",
+      text: JSON.stringify({
+        compilerOptions: { target: "ES2022", module: "ESNext", strict: true }
+      }, null, 2),
+      run: "npx tsfmt -r 'src/**/*.ts'"
+    }),
     details: {
       summary: "Wraps the typescript-formatter npm package, which drives the TypeScript language " +
                "service's own formatter. It normalises spacing and indentation and little else - " +

@@ -29,7 +29,9 @@ export function defaultState(languageId = listLanguages()[0].id) {
     language: language.id,
     formatter: language.formatters[0].id,
     enabled: {}, opts: {}, formatterOpts: {},
-    build: "gradle", view: "diff",
+    // The first target the language declares - "gradle" for a JVM language,
+    // the native config file for one nobody builds with a JVM tool.
+    build: language.builds[0], view: "diff",
     customSource: null
   };
   for (const step of language.steps) {
@@ -111,7 +113,9 @@ function decode(raw) {
       if (raw.fo[o.id] !== undefined) s.formatterOpts[formatter.id][o.id] = raw.fo[o.id];
     }
   }
-  if (raw.b === "gradle" || raw.b === "maven") s.build = raw.b;
+  // A build target from another language's row must not survive the link:
+  // "gradle" means nothing to a language that offers no Gradle tab.
+  if (language.builds.includes(raw.b)) s.build = raw.b;
   if (["diff", "result", "source"].includes(raw.v)) s.view = raw.v;
   return s;
 }

@@ -2,6 +2,7 @@ import { renderSteps } from "./steps-pane.js";
 import { renderConfig } from "./config-pane.js";
 import { renderResult } from "./result-pane.js";
 import { renderLanguageTabs } from "./language-tabs.js";
+import { renderBuildTabs } from "./build-tabs.js";
 
 /* Two render depths.
  *
@@ -14,6 +15,7 @@ import { renderLanguageTabs } from "./language-tabs.js";
  * blocking the controls behind it would make every one of them feel broken. */
 export function render(app) {
   renderLanguageTabs(app);
+  renderBuildTabs(app);
   renderSteps(app);
   renderConfig(app);
   app.persist();
@@ -26,18 +28,10 @@ export function renderPartial(app) {
   return renderResult(app);
 }
 
-// The build/view tab rows live in the static markup, so they are wired once
-// rather than rebuilt on every render.
+// The view tab row lives in the static markup, so it is wired once rather than
+// rebuilt on every render. The build row is not: its tabs depend on the
+// language, so build-tabs.js rebuilds and rewires it per render.
 export function initTabs(app) {
-  document.querySelectorAll(".tab[data-build]").forEach(t => {
-    t.addEventListener("click", () => {
-      app.state.build = t.dataset.build;
-      syncTabs("data-build", "build", app.state.build);
-      renderConfig(app);
-      app.persist();
-    });
-  });
-
   document.querySelectorAll(".tab[data-view]").forEach(t => {
     t.addEventListener("click", () => {
       app.state.view = t.dataset.view;

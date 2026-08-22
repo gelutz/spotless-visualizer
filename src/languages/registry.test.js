@@ -29,6 +29,20 @@ describe("registerLanguage", () => {
   });
 });
 
+describe("builds", () => {
+  it("defaults to Gradle and Maven, the two Spotless ships as plugins for", () => {
+    expect(registerLanguage(valid({ id: "b1" })).builds).toEqual(["gradle", "maven"]);
+  });
+
+  it("keeps the targets a language declares for itself", () => {
+    expect(registerLanguage(valid({ id: "b2", builds: ["native"] })).builds).toEqual(["native"]);
+  });
+
+  it("treats an empty list as unset rather than as a language with no config pane", () => {
+    expect(registerLanguage(valid({ id: "b3", builds: [] })).builds).toEqual(["gradle", "maven"]);
+  });
+});
+
 describe("getLanguage", () => {
   it("finds a registered language by id", () => {
     registerLanguage(valid({ id: "find-me" }));

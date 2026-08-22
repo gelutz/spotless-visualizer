@@ -16,6 +16,10 @@
  *
  * Optional alongside those:
  *
+ *     builds:        ["gradle", "maven"]  // which config tabs the language offers;
+ *                                     // defaults to Gradle+Maven. A language nobody
+ *                                     // builds with a JVM tool declares ["native"]
+ *                                     // instead and emits its own tool's config file.
  *     target:        "src/**\/*.ts"   // emitted as a target/includes line, for the
  *                                     // languages where Spotless cannot infer the file set
  *     gradlePlugin:  "java"           // extra `id '...'` line in the Gradle plugins block
@@ -31,6 +35,12 @@
  * is the baseline every diff is measured against, so it must be the
  * unformatted sample.
  *
+ * A language whose `builds` includes "native" also gives its formatters a
+ * `native(opts) -> { file, text }`: the whole config file that tool reads on
+ * its own - a .prettierrc, a biome.json - rather than a line inside a Spotless
+ * block. Steps have no native form; the pane lists the enabled ones that the
+ * native tool cannot express.
+ *
  * A step is { id, label, group, doc, opts, apply, gradle, maven }, where
  * `apply(src, opts) -> src` and `group` matches a stepGroups id. `apply` may be
  * null for a step the pipeline implements itself (toggleOffOn).
@@ -44,6 +54,9 @@ export function registerLanguage(lang) {
   }
   if (!lang.formatters.length) throw new Error(`language "${lang.id}" has no formatters`);
   if (languages.has(lang.id)) throw new Error(`language "${lang.id}" is already registered`);
+  // Gradle and Maven are the default because Spotless is a plugin for both;
+  // a language opts out only by naming its own build targets.
+  if (!lang.builds?.length) lang.builds = ["gradle", "maven"];
   languages.set(lang.id, lang);
   return lang;
 }

@@ -15,6 +15,11 @@ export const typescript = registerLanguage({
   label: "TypeScript",
   fileName: "Example.ts",
   blockName: "typescript",
+  // Nobody adds Gradle or Maven to a TypeScript project to run Prettier, so the
+  // config pane shows the files these tools actually read instead of a Spotless
+  // block. Spotless does support typescript {}, but not in a repo that has no
+  // JVM build to hang it off.
+  builds: ["native"],
   // Mandatory here: unlike java {}, Spotless infers no file set for typescript
   // {} and the block is invalid without it.
   target: "src/**/*.ts",

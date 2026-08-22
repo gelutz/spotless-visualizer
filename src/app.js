@@ -17,7 +17,7 @@ export function createApp(initialState) {
 
     setState(next) {
       app.state = next;
-      syncTabs("data-build", "build", next.build);
+      // The build row is rebuilt by render(); only the static view row needs syncing.
       syncTabs("data-view", "view", next.view);
       return render(app);
     },
