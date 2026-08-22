@@ -1,0 +1,37 @@
+/* The header is two rows now (title + language tabs), so #app is sized by
+   flexing against it rather than subtracting a hardcoded header height. */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: minmax(360px, 34%) 1fr;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+@media (max-width: 900px) {
+  #app { grid-template-columns: 1fr; min-height: auto; }
+}
+
+.col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.col.left { border-right: 1px solid var(--border); }
+
+/* Language tab row. Sits under the header, above the panes. */
+#languages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+#languages .lang-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--fg-dim);
+  margin-right: 2px;
+}
