@@ -8,6 +8,7 @@ export const java = registerLanguage({
   label: "Java",
   fileName: "Example.java",
   blockName: "java",
+  gradlePlugin: "java",
   formatters: JAVA_FORMATTERS,
   // Java-specific steps run before the generic ones: reordering imports before
   // trimming whitespace is the order Spotless itself documents.

@@ -5,14 +5,26 @@ import { findFormatter } from "../core/pipeline.js";
 const GRADLE_PLUGIN_VERSION = "7.0.2";
 const MAVEN_PLUGIN_VERSION = "2.44.4";
 
-function gradleSnippet(language, formatter, active, opts) {
+/* Spotless infers the file set for some languages and demands it for others -
+ * TypeScript has no convention to fall back on, so its block is invalid
+ * without an explicit target. */
+function blockBody(language, formatter, active, opts, emit) {
   const body = [];
-  if (formatter && formatter.gradle) body.push(formatter.gradle());
-  active.forEach(s => body.push(s.gradle(opts[s.id])));
+  if (language.target) body.push(emit === "gradle"
+    ? `target '${language.target}'`
+    : `<includes>\n  <include>${esc(language.target)}</include>\n</includes>`);
+  if (formatter && formatter[emit]) body.push(formatter[emit](opts.formatterOpts));
+  active.forEach(s => body.push(s[emit](opts[s.id])));
+  return body;
+}
+
+function gradleSnippet(language, formatter, active, opts) {
+  const body = blockBody(language, formatter, active, opts, "gradle");
   return [
     "// build.gradle  (truncated)",
     "plugins {",
-    "    id 'java'",
+    // Only the languages that are a Gradle plugin get one. TypeScript is not.
+    ...(language.gradlePlugin ? [`    id '${language.gradlePlugin}'`] : []),
     `    id 'com.diffplug.spotless' version '${GRADLE_PLUGIN_VERSION}'`,
     "}",
     "",
@@ -25,9 +37,7 @@ function gradleSnippet(language, formatter, active, opts) {
 }
 
 function mavenSnippet(language, formatter, active, opts) {
-  const body = [];
-  if (formatter && formatter.maven) body.push(formatter.maven());
-  active.forEach(s => body.push(s.maven(opts[s.id])));
+  const body = blockBody(language, formatter, active, opts, "maven");
   return [
     "<!-- pom.xml  (truncated) -->",
     "<plugin>",
@@ -49,9 +59,11 @@ export function renderConfig(app) {
   const active = language.steps.filter(s => state.enabled[s.id]);
   const el = document.getElementById("config");
 
+  // The formatter's own options ride along under a key no step can claim.
+  const opts = { ...state.opts, formatterOpts: state.formatterOpts[formatter.id] || {} };
   const text = state.build === "gradle"
-    ? gradleSnippet(language, formatter, active, state.opts)
-    : mavenSnippet(language, formatter, active, state.opts);
+    ? gradleSnippet(language, formatter, active, opts)
+    : mavenSnippet(language, formatter, active, opts);
 
   // Stashed raw so the copy button hands over text, not the rendered spans.
   el.dataset.raw = text;

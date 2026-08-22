@@ -103,7 +103,14 @@ const FAKE = {
   id: "fake", label: "Fake", fileName: "f.txt", blockName: "fake",
   formatters: [
     { id: "none", label: "(none)", doc: "", text: "a\nb", gradle: null, maven: null },
-    { id: "big",  label: "big()",  doc: "", text: "A\nB", gradle: () => "big()", maven: () => "<big/>" }
+    { id: "big",  label: "big()",  doc: "", text: "A\nB", gradle: () => "big()", maven: () => "<big/>" },
+    // Stands in for Prettier/Biome: really executes, and can refuse to parse.
+    { id: "real", label: "real()", doc: "", text: "", gradle: () => "real()", maven: () => "<real/>",
+      opts: [{ id: "bang", type: "bool", def: false }],
+      run: async (src, o) => {
+        if (src.includes("boom")) throw new Error("nope");
+        return src.toUpperCase() + (o.bang ? "!" : "");
+      } }
   ],
   steps: [
     { id: "shout", label: "shout", group: "g", doc: "", opts: [],
@@ -119,56 +126,83 @@ const stateFor = (over = {}) => ({
   language: "fake", formatter: "none", build: "gradle", view: "diff", customSource: null,
   enabled: { shout: false, toggleOffOn: false },
   opts: { shout: {}, toggleOffOn: { off: OFF, on: ON } },
+  formatterOpts: { none: {}, big: {}, real: { bang: false } },
   ...over
 });
 
 describe("runPipeline", () => {
-  it("returns the source untouched when nothing is enabled", () => {
-    const r = runPipeline(FAKE, stateFor());
+  it("returns the source untouched when nothing is enabled", async () => {
+    const r = await runPipeline(FAKE, stateFor());
     expect(r.lines).toEqual(["a", "b"]);
     expect(r.blame.every(b => b.size === 0)).toBe(true);
   });
 
-  it("runs an enabled step and credits it", () => {
-    const r = runPipeline(FAKE, stateFor({ enabled: { shout: true, toggleOffOn: false } }));
+  it("runs an enabled step and credits it", async () => {
+    const r = await runPipeline(FAKE, stateFor({ enabled: { shout: true, toggleOffOn: false } }));
     expect(r.lines).toEqual(["A", "B"]);
     expect(r.blame.every(b => b.has("shout"))).toBe(true);
   });
 
-  it("shields a frozen region from an enabled step", () => {
+  it("shields a frozen region from an enabled step", async () => {
     const state = stateFor({
       enabled: { shout: true, toggleOffOn: true },
       customSource: ["a", "// spotless:off", "keep me", "// spotless:on", "b"].join("\n")
     });
-    const r = runPipeline(FAKE, state);
+    const r = await runPipeline(FAKE, state);
     expect(r.lines).toEqual(["A", "// spotless:off", "keep me", "// spotless:on", "B"]);
   });
 
-  it("credits the reformatter for lines no step explains", () => {
-    const r = runPipeline(FAKE, stateFor({ formatter: "big" }));
+  it("credits the reformatter for lines no step explains", async () => {
+    const r = await runPipeline(FAKE, stateFor({ formatter: "big" }));
     expect(r.lines).toEqual(["A", "B"]);
     expect(r.blame.every(b => b.has("formatter"))).toBe(true);
   });
 
-  it("does not credit the reformatter on pasted source", () => {
-    const r = runPipeline(FAKE, stateFor({ formatter: "big", customSource: "x\ny" }));
+  it("does not credit a snapshot reformatter on pasted source", async () => {
+    const r = await runPipeline(FAKE, stateFor({ formatter: "big", customSource: "x\ny" }));
     expect(r.lines).toEqual(["x", "y"]);
     expect(r.blame.every(b => b.size === 0)).toBe(true);
+  });
+
+  // The point of a `run` formatter: pasted source gets the real thing.
+  it("runs a real reformatter on pasted source and credits it", async () => {
+    const r = await runPipeline(FAKE, stateFor({ formatter: "real", customSource: "x\ny" }));
+    expect(r.lines).toEqual(["X", "Y"]);
+    expect(r.blame.every(b => b.has("formatter"))).toBe(true);
+  });
+
+  it("falls back to the unformatted source when a real reformatter throws", async () => {
+    const r = await runPipeline(FAKE, stateFor({ formatter: "real", customSource: "boom" }));
+    expect(r.lines).toEqual(["boom"]);
+    expect(r.error).toBe("nope");
+  });
+
+  it("feeds the formatter its own options", async () => {
+    const r = await runPipeline(FAKE, stateFor({
+      formatter: "real", customSource: "x", formatterOpts: { real: { bang: true } }
+    }));
+    expect(r.lines).toEqual(["X!"]);
   });
 });
 
 describe("sourceOf", () => {
-  it("diffs a built-in sample against the unformatted baseline", () => {
-    const { base, baseline, custom } = sourceOf(FAKE, stateFor({ formatter: "big" }));
+  it("diffs a built-in sample against the unformatted baseline", async () => {
+    const { base, baseline, custom } = await sourceOf(FAKE, stateFor({ formatter: "big" }));
     expect(base).toBe("A\nB");
     expect(baseline).toBe("a\nb");
     expect(custom).toBe(false);
   });
 
-  it("diffs pasted source against itself", () => {
-    const { base, baseline, custom } = sourceOf(FAKE, stateFor({ customSource: "x" }));
+  it("diffs pasted source against itself", async () => {
+    const { base, baseline, custom } = await sourceOf(FAKE, stateFor({ customSource: "x" }));
     expect(base).toBe("x");
     expect(baseline).toBe("x");
     expect(custom).toBe(true);
+  });
+
+  it("applies a real reformatter to the built-in sample", async () => {
+    const { base, baseline } = await sourceOf(FAKE, stateFor({ formatter: "real" }));
+    expect(base).toBe("A\nB");
+    expect(baseline).toBe("a\nb");
   });
 });

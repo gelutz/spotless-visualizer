@@ -14,6 +14,13 @@ const DEFAULT_ON = [
   "trimTrailingWhitespace", "endWithNewline", "toggleOffOn"
 ];
 
+// Steps and formatters declare options in the same shape, so they seed the same way.
+const defaultsOf = owner => {
+  const o = {};
+  for (const opt of owner.opts || []) o[opt.id] = opt.def;
+  return o;
+};
+
 export function defaultState(languageId = listLanguages()[0].id) {
   const language = getLanguage(languageId);
   // customSource === null means "use the built-in sample for the picked
@@ -21,15 +28,17 @@ export function defaultState(languageId = listLanguages()[0].id) {
   const s = {
     language: language.id,
     formatter: language.formatters[0].id,
-    enabled: {}, opts: {},
+    enabled: {}, opts: {}, formatterOpts: {},
     build: "gradle", view: "diff",
     customSource: null
   };
   for (const step of language.steps) {
     s.enabled[step.id] = DEFAULT_ON.includes(step.id);
-    s.opts[step.id] = {};
-    for (const o of step.opts) s.opts[step.id][o.id] = o.def;
+    s.opts[step.id] = defaultsOf(step);
   }
+  // Formatters that really run take options too. Kept in their own map because
+  // a formatter and a step can share an id without colliding.
+  for (const f of language.formatters) s.formatterOpts[f.id] = defaultsOf(f);
   return s;
 }
 
@@ -46,22 +55,32 @@ export function switchLanguage(state, languageId) {
  * Only the option values that differ from their default are stored, so a
  * default config produces a short hash and adding a new option to a step does
  * not invalidate existing links. */
+const changedOpts = (owner, values) => {
+  const diff = {};
+  for (const o of owner.opts || []) {
+    const v = values?.[o.id];
+    if (v !== undefined && v !== o.def) diff[o.id] = v;
+  }
+  return diff;
+};
+
 function encode(state) {
   const language = getLanguage(state.language);
   const opts = {};
   for (const step of language.steps) {
-    const diff = {};
-    for (const o of step.opts) {
-      const v = state.opts[step.id]?.[o.id];
-      if (v !== undefined && v !== o.def) diff[o.id] = v;
-    }
+    const diff = changedOpts(step, state.opts[step.id]);
     if (Object.keys(diff).length) opts[step.id] = diff;
   }
+  // Only the selected formatter's options are worth carrying: switching
+  // formatter is a different configuration, not a variant of this one.
+  const formatter = language.formatters.find(f => f.id === state.formatter);
+  const fo = formatter ? changedOpts(formatter, state.formatterOpts?.[formatter.id]) : {};
   return {
     l: state.language,
     f: state.formatter,
     e: language.steps.filter(s => state.enabled[s.id]).map(s => s.id),
     o: opts,
+    fo: Object.keys(fo).length ? fo : undefined,
     b: state.build,
     v: state.view
   };
@@ -84,6 +103,12 @@ function decode(raw) {
       for (const o of step.opts) {
         if (stored[o.id] !== undefined) s.opts[step.id][o.id] = stored[o.id];
       }
+    }
+  }
+  if (raw.fo && typeof raw.fo === "object") {
+    const formatter = language.formatters.find(f => f.id === s.formatter);
+    for (const o of formatter?.opts || []) {
+      if (raw.fo[o.id] !== undefined) s.formatterOpts[formatter.id][o.id] = raw.fo[o.id];
     }
   }
   if (raw.b === "gradle" || raw.b === "maven") s.build = raw.b;

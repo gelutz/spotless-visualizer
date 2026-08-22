@@ -107,3 +107,17 @@
   padding: 1px 5px;
 }
 .pane-head .badge[hidden] { display: none; }
+
+/* Inline affordance in a note - used by the reformatter that has to download
+ * before it can run. */
+.src-note button.inline {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-left: 2px;
+  cursor: pointer;
+}
+.src-note button.inline:hover { background: var(--accent); color: var(--bg); }

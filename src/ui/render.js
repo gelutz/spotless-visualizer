@@ -9,18 +9,21 @@ import { renderLanguageTabs } from "./language-tabs.js";
  * the steps pane, which is what option inputs need: rebuilding that pane
  * replaces the element being typed into and the caret goes with it. */
 
+/* The cheap panes paint immediately and the result pane catches up on its own.
+ * A `run` reformatter can take a lazy import to resolve the first time, and
+ * blocking the controls behind it would make every one of them feel broken. */
 export function render(app) {
   renderLanguageTabs(app);
   renderSteps(app);
   renderConfig(app);
-  renderResult(app);
   app.persist();
+  return renderResult(app);
 }
 
 export function renderPartial(app) {
   renderConfig(app);
-  renderResult(app);
   app.persist();
+  return renderResult(app);
 }
 
 // The build/view tab rows live in the static markup, so they are wired once
@@ -39,8 +42,8 @@ export function initTabs(app) {
     t.addEventListener("click", () => {
       app.state.view = t.dataset.view;
       syncTabs("data-view", "view", app.state.view);
-      renderResult(app);
       app.persist();
+      renderResult(app);
     });
   });
 }

@@ -1,9 +1,9 @@
 import { esc } from "../core/html.js";
 import { openFormatterHelp } from "./modal.js";
 
-function optControl(state, step, opt) {
-  const val = state.opts[step.id][opt.id];
-  const id = `opt-${step.id}-${opt.id}`;
+function optControl(values, ownerId, opt) {
+  const val = values[opt.id];
+  const id = `opt-${ownerId}-${opt.id}`;
   let ctrl;
   if (opt.type === "bool") {
     ctrl = `<input type="checkbox" id="${id}" ${val ? "checked" : ""}>`;
@@ -18,6 +18,15 @@ function optControl(state, step, opt) {
   }
   return `<span class="opt"><label for="${id}">${opt.id}</label>${ctrl}</span>`;
 }
+
+// Reading a control back is the same job wherever it lives.
+function readOpt(el, opt) {
+  return opt.type === "bool" ? el.checked
+       : opt.type === "int"  ? parseInt(el.value, 10) || opt.def
+       : el.value;
+}
+
+const optEvent = opt => (opt.type === "bool" || opt.type === "select" ? "change" : "input");
 
 export function renderSteps(app) {
   const { language, state } = app;
@@ -37,6 +46,9 @@ export function renderSteps(app) {
         <button class="help" data-help="${f.id}" title="what this formatter does">?</button>
       </div>
       <div class="doc">${esc(f.doc)}</div>
+      ${on && f.opts && f.opts.length
+        ? `<div class="opts">${f.opts.map(o => optControl(state.formatterOpts[f.id], f.id, o)).join("")}</div>`
+        : ""}
     </div>`;
   });
 
@@ -52,7 +64,7 @@ export function renderSteps(app) {
           <label for="step-${s.id}">${esc(s.label)}</label>
         </div>
         <div class="doc">${esc(s.doc)}</div>
-        ${s.opts.length ? `<div class="opts">${s.opts.map(o => optControl(state, s, o)).join("")}</div>` : ""}
+        ${s.opts.length ? `<div class="opts">${s.opts.map(o => optControl(state.opts[s.id], s.id, o)).join("")}</div>` : ""}
       </div>`;
     });
   });
@@ -61,6 +73,18 @@ export function renderSteps(app) {
 
   host.querySelectorAll('input[name=formatter]').forEach(el => {
     el.addEventListener("change", () => { state.formatter = el.value; app.render(); });
+  });
+  language.formatters.forEach(f => {
+    (f.opts || []).forEach(o => {
+      const el = document.getElementById(`opt-${f.id}-${o.id}`);
+      if (!el) return;
+      // Same reason as the step options: a full render would rebuild this pane
+      // and take the focused field with it.
+      el.addEventListener(optEvent(o), () => {
+        state.formatterOpts[f.id][o.id] = readOpt(el, o);
+        app.renderPartial();
+      });
+    });
   });
   host.querySelectorAll("button.help").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -75,11 +99,8 @@ export function renderSteps(app) {
     s.opts.forEach(o => {
       const el = document.getElementById(`opt-${s.id}-${o.id}`);
       if (!el) return;
-      const evt = o.type === "bool" || o.type === "select" ? "change" : "input";
-      el.addEventListener(evt, () => {
-        state.opts[s.id][o.id] =
-          o.type === "bool" ? el.checked :
-          o.type === "int"  ? parseInt(el.value, 10) || o.def : el.value;
+      el.addEventListener(optEvent(o), () => {
+        state.opts[s.id][o.id] = readOpt(el, o);
         // Deliberately not a full render: rebuilding the steps pane here would
         // drop focus out of the field being typed into.
         app.renderPartial();

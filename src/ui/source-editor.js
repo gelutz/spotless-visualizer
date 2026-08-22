@@ -1,13 +1,14 @@
-import { renderSourcePane, renderResult } from "./result-pane.js";
+import { renderResult } from "./result-pane.js";
 
 export function initSourceEditor(app) {
   const ta = document.getElementById("source");
 
   // Typing marks the source as custom and re-runs the pipeline. renderResult
-  // skips the diff render while the editor is open, so this stays cheap.
+  // skips the diff render while the editor is open, so this stays cheap - and
+  // it drops stale async renders, which is what keeps fast typing coherent.
   ta.addEventListener("input", () => {
     app.state.customSource = ta.value;
-    renderSourcePane(app);
+    renderResult(app);
   });
 
   // A textarea would otherwise move focus out of the field on Tab, which is
@@ -19,7 +20,7 @@ export function initSourceEditor(app) {
     ta.value = value.slice(0, a) + "\t" + value.slice(b);
     ta.selectionStart = ta.selectionEnd = a + 1;
     app.state.customSource = ta.value;
-    renderSourcePane(app);
+    renderResult(app);
   });
 
   // Leaving the editor is when the diff is worth recomputing.

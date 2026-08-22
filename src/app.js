@@ -19,11 +19,13 @@ export function createApp(initialState) {
       app.state = next;
       syncTabs("data-build", "build", next.build);
       syncTabs("data-view", "view", next.view);
-      render(app);
+      return render(app);
     },
 
-    render()        { render(app); },
-    renderPartial() { renderPartial(app); },
+    // Return the render promise so a caller can await a settled pane; nothing
+    // in the UI needs to, but tests and future callers do.
+    render()        { return render(app); },
+    renderPartial() { return renderPartial(app); },
     persist()       { saveToHash(app.state); }
   };
   return app;

@@ -1,7 +1,8 @@
 import { esc } from "../core/html.js";
 
-/* Formatter help modal: the reformatters are the one thing this page cannot
- * actually run, so the "?" spells out what the real step would do. */
+/* Formatter help modal. For a reformatter this page cannot run, the "?" is the
+ * only place the real behaviour is spelled out; for one that does run, it is
+ * where the options it does not expose live. */
 
 export function openFormatterHelp(language, id) {
   const f = language.formatters.find(x => x.id === id);
@@ -19,10 +20,10 @@ export function openFormatterHelp(language, id) {
         `<div class="opt-row"><code>${esc(call)}</code><span>${esc(what)}</span></div>`).join("");
   }
   if (d.note) html += `<div class="note">${esc(d.note)}</div>`;
-  if (f.id !== "none") {
+  if (f.id !== "none" && !f.run) {
     html += `<div class="note">The panel on the right shows a hand-written snapshot of roughly ` +
-            `this formatter's output, not its real result &mdash; ${esc(f.label)} needs a JVM. ` +
-            `Every other step is genuinely executed on top of it.</div>`;
+            `this formatter's output, not its real result &mdash; ${esc(f.label)} can't run in a ` +
+            `browser. Every other step is genuinely executed on top of it.</div>`;
   }
 
   document.getElementById("modal-title").textContent = f.label;

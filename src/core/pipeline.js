@@ -52,20 +52,39 @@ export function restoreFrozenRegions(t, frozen) {
 
 /* The text the pipeline starts from, and what the diff is measured against.
  *
- * With the built-in sample the reformatter is a pre-baked snapshot, so the
- * pipeline starts from that snapshot while the diff baseline stays the raw,
- * unformatted sample - that is what makes the reformatter's own effect show up
- * as changed lines.
+ * Two kinds of reformatter. Some really run here - Prettier and Biome are
+ * JavaScript and TypeScript is their own language - and they carry a `run`.
+ * The rest are JVM or Node tools that cannot execute in a browser at all, and
+ * ship a hand-written `text` snapshot instead.
  *
- * With pasted source there is no snapshot to swap in: the real reformatters are
- * whole language parsers and cannot run in a browser. So source and baseline are
- * both the user's text, and only the cheap steps actually run. */
-export function sourceOf(language, state) {
-  if (state.customSource !== null) {
-    return { base: state.customSource, baseline: state.customSource, custom: true };
-  }
+ * A `run` formatter is applied to whatever the user is looking at, pasted
+ * source included. A snapshot one can only be swapped in for the built-in
+ * sample; on pasted source there is nothing to swap, so only the cheap steps
+ * run.
+ *
+ * The baseline is the unformatted text either way, which is what makes the
+ * reformatter's own effect show up as changed lines.
+ *
+ * Async because `run` is: Prettier's format() returns a promise and Biome's
+ * WASM loads on demand. */
+export async function sourceOf(language, state) {
   const formatter = findFormatter(language, state.formatter);
-  return { base: formatter.text, baseline: language.formatters[0].text, custom: false };
+  const custom = state.customSource !== null;
+  const baseline = custom ? state.customSource : language.formatters[0].text;
+
+  if (!formatter.run) {
+    return { base: custom ? state.customSource : formatter.text, baseline, custom, error: null };
+  }
+
+  // Source mid-edit is unparseable more often than not, and a real reformatter
+  // throws on it. Falling back to the unformatted text keeps the pane showing
+  // something; the message is handed up so the UI can say why.
+  try {
+    return { base: await formatter.run(baseline, state.formatterOpts?.[formatter.id] || {}),
+             baseline, custom, error: null };
+  } catch (e) {
+    return { base: baseline, baseline, custom, error: e.message || String(e) };
+  }
 }
 
 export function findFormatter(language, id) {
@@ -73,10 +92,15 @@ export function findFormatter(language, id) {
 }
 
 /* Runs the enabled steps over the source, tracking which step produced each
- * line. Pure: everything it needs comes from `language` and `state`. */
-export function runPipeline(language, state) {
+ * line. Everything it needs comes from `language` and `state` - the only thing
+ * it reaches outside for is a formatter's own `run`. */
+export async function runPipeline(language, state, resolved = null) {
   const formatter = findFormatter(language, state.formatter);
-  const { base, custom } = sourceOf(language, state);
+  // The reformatter is resolved as one async stage up front; the step fold
+  // below stays synchronous, since every step is a cheap string transform.
+  // A caller that already has the resolved source passes it in rather than
+  // paying for a second run of it.
+  const { base, baseline, custom, error } = resolved || await sourceOf(language, state);
 
   const active = language.steps.filter(s => state.enabled[s.id] && typeof s.apply === "function");
   const fold = src => active.reduce(
@@ -92,10 +116,10 @@ export function runPipeline(language, state) {
     result = fold(base);
   }
 
-  // The chosen reformatter is itself a change vs the unformatted sample.
-  // Only meaningful for the built-in sample - on pasted source no reformatter ran.
-  if (formatter.id !== "none" && !custom) {
-    const vsRaw = diffLines(language.formatters[0].text.split("\n"), result.lines);
+  // The chosen reformatter is itself a change vs the unformatted text. A
+  // snapshot one only ran for the built-in sample; a `run` one ran either way.
+  if (formatter.id !== "none" && (!custom || formatter.run)) {
+    const vsRaw = diffLines(baseline.split("\n"), result.lines);
     let k = 0;
     for (const r of vsRaw) {
       if (r.t === "del") continue;
@@ -105,5 +129,7 @@ export function runPipeline(language, state) {
       k++;
     }
   }
+  // Carried so the pane can report a reformatter that refused to parse.
+  result.error = error;
   return result;
 }

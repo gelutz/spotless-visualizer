@@ -14,10 +14,22 @@
  *     stepGroups: [{ id, title }]     // group headings in the steps pane
  *   })
  *
- * A formatter is { id, label, doc, text, gradle, maven, details }. `text` is the
- * sample source as that formatter would leave it; `gradle`/`maven` are null for
- * the "none" entry, which emits no config line. `formatters[0]` is the baseline
- * every diff is measured against, so it must be the unformatted sample.
+ * Optional alongside those:
+ *
+ *     target:        "src/**\/*.ts"   // emitted as a target/includes line, for the
+ *                                     // languages where Spotless cannot infer the file set
+ *     gradlePlugin:  "java"           // extra `id '...'` line in the Gradle plugins block
+ *     formatterNote: "..."            // HTML shown above the reformatter list, since the
+ *                                     // reason the formatters are what they are is per-language
+ *
+ * A formatter is { id, label, doc, text, gradle, maven, details }, plus two
+ * optional fields for the ones that really execute here: `opts`, declared like
+ * a step's, and `run(src, opts) -> Promise<string>`. With a `run` the pane
+ * shows a real result, pasted source included; without one, `text` is a
+ * hand-written snapshot of what the real tool would produce. `gradle`/`maven`
+ * are null for the "none" entry, which emits no config line. `formatters[0]`
+ * is the baseline every diff is measured against, so it must be the
+ * unformatted sample.
  *
  * A step is { id, label, group, doc, opts, apply, gradle, maven }, where
  * `apply(src, opts) -> src` and `group` matches a stepGroups id. `apply` may be

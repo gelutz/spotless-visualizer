@@ -6,7 +6,21 @@ globalThis.location = { hash: "" };
 globalThis.history = { replaceState: (_a, _b, url) => { globalThis.location.hash = url; } };
 
 const { defaultState, switchLanguage, saveToHash, loadFromHash } = await import("./state.js");
+const { registerLanguage } = await import("./languages/registry.js");
 await import("./languages/java/index.js");
+
+/* Java's formatters declare no options, so a language that does is needed to
+ * exercise the formatter-option half of the round trip. */
+registerLanguage({
+  id: "opted", label: "Opted", fileName: "f.ts", blockName: "opted",
+  formatters: [
+    { id: "none", label: "(none)", doc: "", text: "a", gradle: null, maven: null },
+    { id: "real", label: "real()", doc: "", text: "", gradle: () => "", maven: () => "",
+      opts: [{ id: "width", type: "int", def: 80 }, { id: "semi", type: "bool", def: true }],
+      run: async s => s }
+  ],
+  steps: [], stepGroups: [{ id: "g", title: "G" }]
+});
 
 describe("defaultState", () => {
   beforeEach(() => { location.hash = ""; });
@@ -28,6 +42,14 @@ describe("defaultState", () => {
     const s = defaultState();
     expect(s.opts.indent.spacesPerTab).toBe(4);
     expect(s.opts.toggleOffOn.off).toBe("spotless:off");
+  });
+
+  // Java's formatters declare none, but the map still has an entry per
+  // formatter so a lookup never lands on undefined.
+  it("gives every formatter an options bag", () => {
+    const s = defaultState();
+    expect(Object.keys(s.formatterOpts).sort()).toEqual(["aosp", "eclipse", "gjf", "none", "palantir"]);
+    expect(s.formatterOpts.gjf).toEqual({});
   });
 });
 
@@ -61,6 +83,31 @@ describe("hash round trip", () => {
     expect(back.enabled.importOrder).toBe(false);
     expect(back.build).toBe("maven");
     expect(back.view).toBe("result");
+  });
+
+  it("restores non-default formatter options", () => {
+    const s = defaultState("opted");
+    s.formatter = "real";
+    s.formatterOpts.real.width = 120;
+    const back = roundTrip(s);
+    expect(back.formatter).toBe("real");
+    expect(back.formatterOpts.real.width).toBe(120);
+    expect(back.formatterOpts.real.semi).toBe(true);
+  });
+
+  it("ignores formatter options a stale link invented", () => {
+    const s = defaultState("opted");
+    s.formatter = "real";
+    saveToHash(s);
+    const raw = JSON.parse(decodeURIComponent(escape(atob(
+      location.hash.slice(1).replace(/-/g, "+").replace(/_/g, "/")))));
+    raw.fo = { width: 120, nonsense: 1 };
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    location.hash = "#" + b64;
+    const back = loadFromHash();
+    expect(back.formatterOpts.real.width).toBe(120);
+    expect(back.formatterOpts.real.nonsense).toBeUndefined();
   });
 
   it("restores non-default option values", () => {

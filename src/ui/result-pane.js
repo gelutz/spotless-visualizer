@@ -27,7 +27,7 @@ function blameTitle(app, ids) {
 /* Chrome around the result pane: the editor itself, the "custom" badge, the
  * restore button and the warning shown when a reformatter is picked but cannot
  * run on pasted source. */
-export function renderSourcePane(app) {
+export function renderSourcePane(app, resolved = null) {
   const { language, state } = app;
   const editing = state.view === "source";
   const custom = state.customSource !== null;
@@ -41,8 +41,10 @@ export function renderSourcePane(app) {
 
   // Only push text in when the textarea is not the thing being typed into,
   // otherwise we would fight the caret on every keystroke.
+  // The textarea shows what you typed, not what the reformatter made of it -
+  // otherwise the caret would land in text you never wrote.
   if (document.activeElement !== ta) {
-    const want = custom ? state.customSource : sourceOf(language, state).base;
+    const want = custom ? state.customSource : (resolved ? resolved.base : language.formatters[0].text);
     if (ta.value !== want) ta.value = want;
   }
 
@@ -51,11 +53,29 @@ export function renderSourcePane(app) {
   document.getElementById("src-name").textContent = custom ? "your source" : language.fileName;
 
   const fmt = findFormatter(language, state.formatter);
-  if (custom && fmt && fmt.id !== "none") {
+  const error = resolved && resolved.error;
+  // A gated formatter has not downloaded yet, so its "error" is the prompt.
+  if (fmt.gate && !fmt.gate.armed()) {
     note.hidden = false;
-    note.innerHTML = `<b>${esc(fmt.label)}</b> is not applied here. Real ${esc(language.label)} ` +
-      `reformatters can't run in a browser, so on your own source only the steps below ` +
-      `actually run. It is still written into the config on the left.`;
+    note.innerHTML = `${esc(fmt.gate.prompt)} ` +
+      `<button id="btn-arm" class="inline">${esc(fmt.gate.action)}</button>`;
+    document.getElementById("btn-arm").addEventListener("click", () => {
+      fmt.gate.arm();
+      renderResult(app);
+    });
+  } else if (error) {
+    note.hidden = false;
+    note.innerHTML = `<b>${esc(fmt.label)}</b> could not parse this source, so it was left ` +
+      `unformatted: <code>${esc(error)}</code>`;
+  } else if (custom && fmt && fmt.id !== "none" && !fmt.run) {
+    note.hidden = false;
+    note.innerHTML = `<b>${esc(fmt.label)}</b> is not applied here. It can't run in a browser, ` +
+      `so on your own source only the steps below actually run. It is still written into the ` +
+      `config on the left.`;
+  } else if (custom && fmt && fmt.run) {
+    note.hidden = false;
+    note.innerHTML = `<b>${esc(fmt.label)}</b> is really running on <b>your source</b>. ` +
+      `Edits re-run it as you type; the diff is against what you pasted.`;
   } else if (custom) {
     note.hidden = false;
     note.innerHTML = `Formatting <b>your source</b>. Edits re-run the pipeline as you type; ` +
@@ -65,10 +85,19 @@ export function renderSourcePane(app) {
   }
 }
 
-export function renderResult(app) {
+/* Renders that resolve out of order would paint stale output: a `run`
+ * reformatter is async, and a fast typist outruns it. Only the newest render
+ * is allowed to touch the DOM. */
+let latest = 0;
+
+export async function renderResult(app) {
   const { language, state } = app;
-  const before = sourceOf(language, state).baseline;
-  const res = runPipeline(language, state);
+  const token = ++latest;
+  const resolved = await sourceOf(language, state);
+  const res = await runPipeline(language, state, resolved);
+  if (token !== latest) return;
+
+  const before = resolved.baseline;
   const after = res.lines.join("\n");
   const el = document.getElementById("result");
 
@@ -77,7 +106,7 @@ export function renderResult(app) {
     return t ? ` data-blame="${esc(t)}"` : "";
   };
 
-  renderSourcePane(app);
+  renderSourcePane(app, resolved);
   if (state.view === "source") return;                     // textarea is showing instead
 
   let html = "";
