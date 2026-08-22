@@ -1,4 +1,4 @@
-[![Typing SVG](https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=15&duration=2000&pause=2500&color=9E8BF9&vCenter=true&center=true&multiline=true&random=false&width=435&lines=Toggle+a+Spotless+step%2C+see+what+it+does;No+build+step.+Just+open+the+HTML+file)](https://github.com/gelutz/spotless-visualizer)
+[![Typing SVG](https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=15&duration=2000&pause=2500&color=9E8BF9&vCenter=true&center=true&multiline=true&random=false&width=435&lines=Toggle+a+Spotless+step%2C+see+what+it+does;Read+the+diff%2C+copy+the+config)](https://github.com/gelutz/spotless-visualizer)
 
 [![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.java.com)
 [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/docs/Web/JavaScript)
@@ -18,13 +18,19 @@ over. Here you toggle and read the diff.
 
 ## Getting Started
 
-Open `index.html` in a browser. No build step, no server.
+Live at **[gelutz.github.io/spotless-visualizer](https://gelutz.github.io/spotless-visualizer/)** — nothing to
+install. The configuration you build lives in the URL, so a link carries it to whoever you send it to.
+
+To run it locally:
 
 ```bash
 git clone https://github.com/gelutz/spotless-visualizer.git
 cd spotless-visualizer
-xdg-open index.html
+npm install
+npm run dev
 ```
+
+`npm test` runs the unit tests, `npm run build` produces `dist/`. Pushing to `master` deploys.
 
 ## What It Does
 
@@ -50,3 +56,21 @@ Steps implemented in JS, running on top of whichever base you pick:
 `googleJavaFormat`, `palantirJavaFormat` and `eclipse` are JVM tools, so they can't run in a browser.
 I hand-wrote their output as snapshots that swap the base file. They show you the style, not byte-exact
 output. The other steps listed above run live on the base you selected.
+
+## Layout
+
+The steps are the interesting part, and each one is a single file:
+
+```
+src/
+  core/         diff, blame tracking, the step pipeline
+  languages/
+    registry.js       what a language has to provide
+    shared/steps/     steps that aren't tied to a language
+    java/             samples, formatters, the Java-only steps
+  ui/           one module per pane
+```
+
+Adding a language means adding a folder under `src/languages/` that calls `registerLanguage`
+and importing it from `src/main.js`. Nothing in `core/` or `ui/` needs to change — the generic
+steps come along for free.
