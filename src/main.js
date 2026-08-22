@@ -4,6 +4,7 @@ import "./styles/index.css";
 // place that has to know a language exists; adding Kotlin means adding a line
 // here and a folder under languages/.
 import "./languages/java/index.js";
+import "./languages/typescript/index.js";
 
 import { loadFromHash, defaultState } from "./state.js";
 import { createApp } from "./app.js";
